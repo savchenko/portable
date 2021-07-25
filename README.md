@@ -1,2 +1,1 @@
-# bin
-Various useful binaries
+Use at your own risk.
