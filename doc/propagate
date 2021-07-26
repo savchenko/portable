@@ -1,0 +1,10 @@
+#!/bin/env bash
+
+gzip -k ./*.[1-8]
+
+for i in {1..8}
+do
+   sudo cp --force ./*.$i.gz /usr/share/man/man$i/
+done
+
+printf "All done!"
