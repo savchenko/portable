@@ -1,0 +1,268 @@
+#! /bin/bash
+# usrmnt -- An easy-to-use wrapper for udisksctl
+#
+# Copyright (C) 2019  Jake Bauer
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -u
+version="1.1.2"
+
+print_help()
+{
+    printf "\n  Options:
+      ls – List the currently recognized devices
+      q  – Exit
+      v  – Print the current version
+      ?  – Print this help dialog
+      <command> <device> – Execute <command> on <device> where <command> is one of:"
+    printf "\n  Supported udisks Commands:
+      mount     – Mount a device to a mountpoint in /media. Will prompt to
+                  unlock encrypted drives.
+      unmount   – Unmount a device (can also use \"umount\")
+      lock      – Lock an unlocked encrypted device
+      unlock    – Unlock an encrypted device without mounting it
+      info      – Print device info
+      power-off – Power a device off (computer will stop recognizing it)
+                  (can also use \"poweroff\")\n"
+    printf "  Examples:
+      ()>>> mount sdc1
+      (sdc1)>>> unmount sdb2
+      (sdb2)>>> unlock mmcblk0p1\n
+      The device in parentheses is the device from the previous command.
+      When there is a device in parentheses, you can type any command without
+      specifying a device name and that command will act on the device in
+      parentheses. The device in parentheses is only updated when the previous
+      command completed successfully except if you are unlocking a device, it
+      exists, and you get the password wrong in which case it will still update
+      so you can just type \"unlock\" or \"mount\" again.\n
+      For example:
+      (sdb1)>>> unmount
+      will unmount /dev/sdb1.\n\n"
+    return 0
+}
+
+print_dev_list()
+{
+    printf "\n  Devices currently recognized by the computer:\n"
+    lsblk -o TYPE,KNAME,LABEL,SIZE,MODEL,MOUNTPOINT | sed 's/^/    /'
+    echo ""
+    return 0
+}
+
+# Takes one parameter: the device to unlock and mount
+unlock_and_mount()
+{
+    printf "  "
+    unlockResult=$(udisksctl unlock -b /dev/"$1" 2>&1)
+
+    tput setaf 1
+    tput bold
+    if echo "$unlockResult" | grep -qi "is already unlocked"; then
+        printf "\n  ERROR: Device is already unlocked."
+
+    elif echo "$unlockResult" | grep -qi "Operation not permitted"; then
+        printf "\n  ERROR: Incorrect password."
+
+    elif echo "$unlockResult" | grep -qi "is not an encrypted device"; then
+        printf "\n  ERROR: This is not an encrypted device."
+
+    elif echo "$unlockResult" | grep -qi "UnknownMethod"; then
+        printf "\n  ERROR: Device appears to have been unplugged."
+
+    else
+        unlockedDevice=$(echo "$unlockResult" | cut -d' ' -f4 | sed 's/\.//')
+        previousDevice=$(echo "$unlockedDevice" | cut -d'/' -f3)
+        retMsg=$(udisksctl mount -b "$unlockedDevice")
+        return 0
+    fi
+    tput sgr0
+    return 1
+}
+
+# Takes one parameter: the string to check for udisksctl error messages
+check_output()
+{
+    # Print error messages in red
+    tput setaf 1
+    tput bold
+
+    if echo "$1" | grep -qi "AlreadyMounted"; then
+        printf "\n  ERROR: The device is already mounted.\n\n"
+
+    elif echo "$1" | grep -qi "NotMounted"; then
+        printf "\n  ERROR: The device is not mounted.\n\n"
+
+    elif echo "$1" | grep -qi "is not a mountable filesystem"; then
+        printf "\n  ERROR: This device is not a mountable filesystem.\n\n"
+
+    elif echo "$1" | grep -qi "is not an encrypted device"; then
+        printf "\n  ERROR: This device is not an encrypted device.\n\n"
+
+    elif echo "$1" | grep -qi "is already unlocked"; then
+        printf "\n  ERROR: This device is already unlocked.\n\n"
+
+    elif echo "$1" | grep -qi "Operation not permitted"; then
+        printf "\n  ERROR: Incorrect password.\n\n"
+
+    elif echo "$1" | grep -qi "Error looking up object"; then
+        printf "\n  ERROR: Could not find object/device.\n\n"
+
+    elif echo "$1" | grep -qi "Error powering off drive"; then
+        printf "\n  ERROR: Cannot power off the device, device still in use.\n"
+        printf "  Please unmount (and lock if needed) the partitions still in use.\n\n"
+
+    elif echo "$1" | grep -qi "Error locking"; then
+        printf "\n  ERROR: Cannot lock the device, device still in use.\n"
+        printf "  Please unmount the mapped device first (e.g. unmount dm-0).\n\n"
+
+    elif echo "$1" | grep -qi "Error unmounting"; then
+        printf "\n  ERROR: Cannot unmount the device, device still in use.\n\n"
+
+    elif echo "$1" | grep -qi "does not exist"; then
+        printf "\n ERROR: Device appears to have been removed mid-operation.\n\n"
+
+    elif echo "$1" | grep -qi "Error"; then
+        printf "\n  ERROR: Unhandled error: \n\n"
+        echo "$1"
+
+    # Prints success messages in green
+    else
+        tput setaf 2
+        if [ "$prettycmd" = "Power-off" ]; then
+            echo "Powered off $device" | sed 's/^/  /'
+        else
+            echo "$1" | sed 's/^/  /'
+        fi
+        echo ""
+        previousDevice="$device"
+    fi
+
+    # Reset the colours/other properties back to default
+    tput sgr0
+    return 0
+}
+
+# Takes one parameter: the command to execute
+execute_cmd()
+{
+    cmd="$1"
+
+    # Act on a previously used device if no device given by the user
+    if [ "$device" = "" ]; then
+        if [ ! "$previousDevice" = "" ]; then
+            device="$previousDevice"
+        else
+            tput setaf 3
+            tput bold
+            printf "\n  Please enter a device name.\n\n"
+            tput sgr0
+            return 1
+        fi
+    fi
+
+    # Presents the currently executing action to the user in a prettier way
+    if [ "$cmd" = "power-off" ] || [ "$cmd" = "poweroff" ]; then
+        suffix=""
+        cmd="power-off"
+    elif [ "$cmd" = "info" ]; then
+        suffix=" for"
+    else
+        if [ "$cmd" = "umount" ]; then
+            cmd="unmount"
+        fi
+        suffix="ing"
+    fi
+    prettycmd=$(echo "$cmd" | sed 's/./\u&/')
+    printf "\n  %s /dev/%s...\n" "$prettycmd" "$device"
+
+    # Check if encrypted filesystem and unlock+mount if needed
+    echo "$(lsblk -o KNAME,FSTYPE | grep -i -- "$device ")" \
+        | grep -qi "crypto_LUKS"
+    cryptCheck=$?
+
+    # Make the "Passphrase:" prompt prettier
+    tput setaf 6
+    if [ "$cmd" = "unlock" ]; then
+        printf "  "
+    fi
+
+    # Execute the needed command(s)
+    if [ "$1" = "mount" -a "$cryptCheck" = "0" ]; then
+        unlock_and_mount "$device"
+    else
+        retMsg=$(udisksctl "$cmd" -b /dev/"$device" 2>&1)
+    fi
+
+    # Check the output of udisksctl for errors
+    # (unlock_and_mount will set retMsg too)
+    check_output "$retMsg"
+    return 0
+}
+
+cmd_prompt()
+{
+    retMsg=""
+    printf "Enter a command, or ? for help:\n"
+    read -er -p "  ($previousDevice)>>> " cmd device
+
+    # Check if EOF (Ctrl-D) was given to read()
+    readRetCode=$?
+    if [ "$readRetCode" = "1" ]; then
+        echo ""
+        exit 1
+
+    # "Special" commands/cases
+    elif [ "$cmd" = "" ]; then
+        return 1
+    elif [ "$cmd" = "?" ]; then
+        print_help
+    elif [ "$cmd" = "ls" ]; then
+        print_dev_list
+    elif [ "$cmd" = "v" ]; then
+        printf "\n  Version: $version\n\n"
+    elif [ "$cmd" = "q" ]; then
+        exit 0
+
+    # Regular supported commands
+    elif [  "$cmd" = "mount"     \
+         -o "$cmd" = "unmount"   \
+         -o "$cmd" = "umount"    \
+         -o "$cmd" = "lock"      \
+         -o "$cmd" = "unlock"    \
+         -o "$cmd" = "info"      \
+         -o "$cmd" = "power-off" \
+         -o "$cmd" = "poweroff"  \
+         ]; then
+        execute_cmd "$cmd"
+
+    else
+        tput setaf 1
+        tput bold
+        printf "\n  ERROR: Unknown or unsupported command.\n\n"
+        tput sgr0
+    fi
+}
+
+previousDevice=""
+tput bold
+printf "\n  usrmnt $version Copyright (C) 2019  Jake Bauer
+  This program comes with ABSOLUTELY NO WARRANTY.
+  This is free software, licensed under the GNU GPLv3-or-later.
+  You are welcome to redistribute it under certain conditions.\n"
+tput sgr0
+print_dev_list
+while true; do
+    cmd_prompt
+done
