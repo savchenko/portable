@@ -1,0 +1,21 @@
+#!/bin/env bash
+
+if [ $# -eq 1 ]; then
+  iface=${1%}
+else
+  iface="enp0s31f6" # Feel free to replace with your "favourite" one
+fi
+
+ifaces="$(ip -br addr | grep -v -E ^lo | grep -v DOWN | cut -d' ' -f1 | xargs)"
+yellow="\e[38;5;11m"
+clr="$(tput sgr0)\e[0m"
+
+if [[ $ifaces =~ "$iface" ]]; then
+  nstat="$(sudo netstat -i | grep ${iface::-3} | awk '{$1 = sprintf("%-1s", $4)} {$2 = sprintf("%-1s", $8)} 1 2 {print $1, $2}')"
+  etool_rx="$(sudo ethtool -S $iface | grep rx_errors | cut -d':' -f2 | grep -v '\ 0$' | xargs)"
+  etool_crc="$(sudo ethtool -S $iface | grep rx_crc_errors | cut -d':' -f2 | grep -v '\ 0$' | xargs)"
+  iplink="$(sudo ip -s link show $iface | awk 'NR==4 {print $3, $4, $5}')"
+  printf "netstat ${yellow}err${clr}  (rx/tx): $nstat \nethtool rx (${yellow}err${clr}/crc): $etool_rx $etool_crc\nip   (${yellow}err${clr}/drop/miss): $iplink\n"
+else
+  printf "$iface is either down or doesn't exist\n" && exit 1
+fi
