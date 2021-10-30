@@ -1,0 +1,13 @@
+#!/bin/env bash
+
+# https://stackoverflow.com/a/60132582
+clear_line(){
+        printf '\r'
+        cols="$(tput cols)"
+        for i in $(seq "$cols"); do
+                printf ' '
+        done
+        printf '\r'
+}
+
+{ hstr -- $* && clear_line; }
