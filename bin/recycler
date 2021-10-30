@@ -33,7 +33,7 @@ killer() {
     sleep "$2"
     runtime=$( echo "$(date +%s) - $start" | bc -l )
     echo -e "${red}Kill #$n/$3 at ${runtime}s.${clr}"
-    pkill --full --exact $1
+    pkill --full --exact "$1"
 done
 }
 
