@@ -10,7 +10,7 @@ ifaces="$(ip -br addr | grep -v -E ^lo | grep -v DOWN | cut -d' ' -f1 | xargs)"
 yellow="\e[38;5;11m"
 clr="$(tput sgr0)\e[0m"
 
-if [[ $ifaces =~ "$iface" ]]; then
+if [[ $ifaces =~ $iface ]]; then
   nstat="$(sudo netstat -i | grep ${iface::-3} | awk '{$1 = sprintf("%-1s", $4)} {$2 = sprintf("%-1s", $8)} 1 2 {print $1, $2}')"
   etool_rx="$(sudo ethtool -S $iface | grep rx_errors | cut -d':' -f2 | grep -v '\ 0$' | xargs)"
   etool_crc="$(sudo ethtool -S $iface | grep rx_crc_errors | cut -d':' -f2 | grep -v '\ 0$' | xargs)"
