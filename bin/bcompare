@@ -1,0 +1,24 @@
+#!/bin/env bash
+
+export BC_LIB="/usr/lib/beyondcompare"
+export BC_PACKAGE_TYPE="deb_amd64"
+export LD_LIBRARY_PATH="$BC_LIB:$LD_LIBRARY_PATH:$BC_LIB/qt4"
+
+EXEC="$BC_LIB/BCompare"
+
+# execute the program
+ARGS="";
+while [ "$#" -gt 0 ]; do
+	ARGS=$ARGS" \"$1\""
+	shift 1
+done
+/bin/bash -c "exec -a $0 $EXEC $ARGS > /dev/null 2>&1" "$0"
+
+# set exit code / wait on existing instance
+EXIT=$?
+if [ $EXIT = 99 ]; then
+	# detected existing instance of Beyond Compare
+	EXIT=`cat /tmp/BC4_.$$`
+	rm -f /tmp/BC4_.$$
+fi
+exit "$EXIT"
