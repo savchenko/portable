@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+#
+# Launch something without subpixel rendering.
+# Useful when another screen is turned 90 degrees.
+#
+
+set -euo pipefail
+teal="\e[38;5;36m"
+reset="$(tput sgr0)\e[0m"
+
+confirm() {
+  local request response
+  echo -e "${teal}"; request="$1 [y/n]:";
+  while true; do
+    read -r -p "$request " response
+    case "$response" in
+      y)
+        echo -e "${reset}"; return 0;;
+      n)
+        echo -e "${reset}"; return 1;;
+      *)
+        echo -e "${teal}Enter either 'y' or 'n'"; echo -e "${reset}";;
+    esac
+  done
+}
+
+revert() {
+  sleep 1
+  sed -i "s/<const>none<\/const>$/<const>rgb<\/const>/" "$HOME/.config/fontconfig/fonts.conf";
+}
+
+if [ $# -eq 1 ]; then
+  if [[ -x $(which "$1") ]]; then
+    if [ "$(grep --count '<const>rgb</const>' ~/.config/fontconfig/fonts.conf)" -eq 1 ]; then
+      revert &
+      sed -i "s/<const>rgb<\/const>$/<const>none<\/const>/" "$HOME/.config/fontconfig/fonts.conf" &&
+      $1 &> /dev/null &
+    else
+      if confirm 'RGB subpixel rendering is already disabled. Re-enable?'; then
+        revert &&
+        echo -e "Reverted back to RGB.\n";
+      else
+        echo -e "No changes made, exiting...\n"
+        exit 1;
+      fi
+    fi
+  else
+    echo -e "\nSupplied argument is not executable.\n"
+    exit 1
+  fi
+else
+  echo -e "\nUsage: nosubpixel command\n"
+  exit 1
+fi
