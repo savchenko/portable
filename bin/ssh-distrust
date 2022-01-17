@@ -5,5 +5,5 @@ if [ $# -eq 1 ]; then
         ssh-keygen -f "/home/lbr/.ssh/known_hosts" -R "$1"
         ssh-keygen -R "$ip"
 else
-        echo -e "Usage: ssh_distrust HOSTNAME"
+        echo -e "Usage: ssh-distrust HOSTNAME"
 fi
