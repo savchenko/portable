@@ -1,0 +1,22 @@
+#!/bin/bash
+
+#
+# Convert $1 to JPEG
+#
+
+if [ $# -eq 2 ]; then
+  if [[ "$2" -ge 1 && "$2" -le 100 ]]; then
+    if [ ! -r "$1" ]; then
+      echo -e "Unable to read $1"
+      exit 1
+    else
+      fname=$(basename -- "$1")
+      bname=${fname%.*}
+      gm convert "$1" -quality 100 jpeg:- | jpegoptim --totals --stdin --strip-all --max="$2" > "$bname".jpg
+    fi
+  else
+    echo -e "JPEG quality should be between 1 and 100"
+  fi
+else
+  echo -e "Usage: /path/to/image.ext QUALITY"
+fi
