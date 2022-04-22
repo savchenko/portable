@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# dirname=`readlink -e "$0"`
+# dirname=`dirname "$dirname"`
+dirname="/opt/xnview"
+export LD_LIBRARY_PATH="$dirname/lib:$dirname/Plugins:$LD_LIBRARY_PATH"
+export QT_PLUGIN_PATH="$dirname/lib:$QT_PLUGIN_PATH"
+export QT_QPA_PLATFORMTHEME=qt5ct
+export QT_QPA_PLATFORM=xcb
+exec "$dirname/XnView" "$@"
