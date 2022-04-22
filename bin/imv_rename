@@ -1,0 +1,52 @@
+#!/bin/bash
+
+#
+# There is some considerable mess with imv threads...
+#
+
+if [ $# -eq 3 ]; then
+
+  old_name=$(realpath "$3" 2> /dev/null)
+
+  if [ ! -f "$old_name" ]; then
+      exit 1
+  fi
+
+  dir_name=${old_name%/*}
+  fname=${old_name##*/} # filename.extension
+  ext="${old_name##*.}" # extension
+  bname="${fname%.*}"   # fname w/o extension
+
+  # Check if there is already a new name for this PID
+  if [ -s "$TMPDIR/imv-$2" ]; then
+    new_name=$(cat "$TMPDIR/imv-$2")
+  else
+    # Remove control file if it exists
+    if [ -f "$TMPDIR/imv-$2-ok" ]; then
+      rm "$TMPDIR/imv-$2-ok";
+    # Else get desired name and write it to the file
+    else
+      wofi --conf "$HOME/.config/wofi/config_single" \
+        -S dmenu -p "$bname" 2> /dev/null > "$TMPDIR/imv-$2"
+      new_name=$(cat "$TMPDIR/imv-$2")
+    fi
+  fi
+
+  # If new name is empty
+  if [[ -z "${new_name// }" ]]; then
+    rm "$TMPDIR/imv-$2" 2> /dev/null;
+    exit 0
+  else
+    # Renaming
+    mv -v "$old_name" "$dir_name/$new_name.$ext" && \
+      echo 1 > "$TMPDIR/imv-$2-ok"; # This rubbish is actually necessary
+    rm "$TMPDIR/imv-$2" 2> /dev/null;
+    imv-msg "$2" close
+    imv-msg "$2" open "$dir_name/$new_name.$ext";
+    imv-msg "$2" goto -1
+    exit 0
+  fi
+
+else
+  exit 0
+fi
